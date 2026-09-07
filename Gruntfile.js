@@ -148,7 +148,10 @@ var gruntTasks = {};
                 return (
                     pathName.indexOf('glMatrix') === -1 &&
                     pathName.indexOf('webgl-debug.js') === -1 &&
-                    pathName.indexOf('webgl-utils.js') === -1
+                    pathName.indexOf('webgl-utils.js') === -1 &&
+                    // upstream KTX-Software artifact and the file generated from it
+                    pathName.indexOf('msc_basis_transcoder.js') === -1 &&
+                    pathName.indexOf('mscBasisTranscoderInlined.js') === -1
                 );
             })
             .map(function(pathname) {
