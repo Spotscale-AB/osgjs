@@ -148,18 +148,66 @@ var describe = function(url) {
     return url ? ' (' + url + ')' : '';
 };
 
+// What this device ended up doing, for working out why a given GPU looks or performs the way
+// it does. The transcoding happens in a worker, whose console is out of reach on a phone, so
+// the outcome is reported from here instead. See getTranscodeStats.
+var transcodeStats = {
+    extensions: [],
+    candidates: [],
+    chosen: {}
+};
+
 /**
  * The transcode targets acceptable to this WebGL context, in the order we would like them.
  * @returns {Array} [ { name, nameOpaque } ], possibly empty, in which case RGBA32 is used
  */
 var getTranscodeCandidates = function() {
     var candidates = [];
+    var extensions = [];
     for (var i = 0; i < TRANSCODE_TARGETS.length; i++) {
         var candidate = TRANSCODE_TARGETS[i];
         if (!hasExtension(candidate.extension)) continue;
+        extensions.push(candidate.extension);
         candidates.push({ name: candidate.name, nameOpaque: candidate.nameOpaque });
     }
+    transcodeStats.extensions = extensions;
+    transcodeStats.candidates = candidates;
     return candidates;
+};
+
+// Describes a candidate the way selectTarget will read it, i.e. showing both the name used for
+// a source with an alpha channel and the one used for a source without
+var describeCandidate = function(candidate) {
+    return candidate.nameOpaque
+        ? candidate.name + '/' + candidate.nameOpaque + ' (alpha/opaque)'
+        : candidate.name;
+};
+
+// Reports, once per distinct target, what the transcoder actually produced
+var reportTranscode = function(targetName) {
+    if (targetName === undefined) return;
+
+    var seen = transcodeStats.chosen[targetName];
+    transcodeStats.chosen[targetName] = (seen || 0) + 1;
+    if (seen !== undefined) return;
+
+    var described = [];
+    for (var i = 0; i < transcodeStats.candidates.length; i++) {
+        described.push(describeCandidate(transcodeStats.candidates[i]));
+    }
+
+    // Deliberately at warn level rather than log: this fires at most once per format per
+    // session, and it is the one thing you need when a device looks or performs unexpectedly.
+    // Consumers turn the notify level down to WARN (swea does), which would swallow a log.
+    var format = GL_FORMAT_BY_TARGET_NAME[targetName];
+    notify.warn(
+        'KTX2: transcoding to ' +
+            targetName +
+            (format !== undefined ? ' (GL 0x' + format.toString(16) + ')' : '') +
+            ', offered [' +
+            (described.join(', ') || 'nothing, no compressed texture extension') +
+            ']'
+    );
 };
 
 // vkFormat is set, so the payload is a plain Vulkan format we either can or cannot upload
@@ -238,6 +286,8 @@ var toImageData = function(transcoded, url) {
                 ', which has no GL format mapped to it'
         );
     }
+
+    //reportTranscode(transcoded.targetName);
 
     var mipmaps = [];
     for (var level = 0; level < transcoded.levels.length; level++) {
@@ -395,6 +445,51 @@ var getTranscodeTargetName = function(alpha) {
     return !alpha && candidates[0].nameOpaque ? candidates[0].nameOpaque : candidates[0].name;
 };
 
+/**
+ * What this device offered and what the transcoder picked. Handy on a phone, where the console
+ * of the transcode worker cannot be reached, and readable from the javascript console as
+ * osgDB.KTX2Reader.getTranscodeStats().
+ * @returns {Object} { extensions, candidates, chosen }, chosen counting textures per target
+ */
+var getTranscodeStats = function() {
+    // Fill the candidates in even if nothing has been read yet
+    if (transcodeStats.candidates.length === 0) getTranscodeCandidates();
+
+    return {
+        extensions: transcodeStats.extensions.slice(0),
+        candidates: transcodeStats.candidates.slice(0),
+        chosen: JSON.parse(JSON.stringify(transcodeStats.chosen))
+    };
+};
+
+/**
+ * The same thing as one line of text, for showing somewhere a console is not available.
+ * @returns {string} a summary of the extensions, the candidates and what was picked
+ */
+var getTranscodeSummary = function() {
+    var stats = getTranscodeStats();
+
+    var described = [];
+    for (var i = 0; i < stats.candidates.length; i++) {
+        described.push(describeCandidate(stats.candidates[i]));
+    }
+
+    var used = [];
+    for (var name in stats.chosen) {
+        used.push(name + ' x' + stats.chosen[name]);
+    }
+
+    return (
+        'KTX2 extensions [' +
+        (stats.extensions.join(', ') || 'none') +
+        '] candidates [' +
+        (described.join(', ') || 'none') +
+        '] used [' +
+        (used.join(', ') || 'nothing yet') +
+        ']'
+    );
+};
+
 export default {
     read: readKTX2,
     readImage: readImageKTX2,
@@ -402,6 +497,8 @@ export default {
     setWorkerCount: setWorkerCount,
     terminateWorkers: terminateWorkers,
     getTranscodeTargetName: getTranscodeTargetName,
+    getTranscodeStats: getTranscodeStats,
+    getTranscodeSummary: getTranscodeSummary,
     getWorkerSource: ktx2Worker.getWorkerSource,
     core: core
 };
