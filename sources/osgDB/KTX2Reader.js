@@ -200,7 +200,7 @@ var reportTranscode = function(targetName) {
     // session, and it is the one thing you need when a device looks or performs unexpectedly.
     // Consumers turn the notify level down to WARN (swea does), which would swallow a log.
     var format = GL_FORMAT_BY_TARGET_NAME[targetName];
-    notify.warn(
+    console.info(
         'KTX2: transcoding to ' +
             targetName +
             (format !== undefined ? ' (GL 0x' + format.toString(16) + ')' : '') +
@@ -287,7 +287,7 @@ var toImageData = function(transcoded, url) {
         );
     }
 
-    //reportTranscode(transcoded.targetName);
+    reportTranscode(transcoded.targetName);
 
     var mipmaps = [];
     for (var level = 0; level < transcoded.levels.length; level++) {

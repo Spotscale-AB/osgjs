@@ -365,6 +365,8 @@ utils.createPrototypeStateAttribute(
                 this._textureWidth = 0;
                 this._textureHeight = 0;
                 this._unrefImageDataAfterApply = false;
+                // SPOTSCALE: URL of the image released after upload, see getImageURL
+                this._unrefImageURL = undefined;
                 this._internalFormat = undefined;
                 this._dirtyMipmap = true;
                 this._textureTarget = Texture.TEXTURE_2D;
@@ -651,6 +653,13 @@ utils.createPrototypeStateAttribute(
 
             setUnrefImageDataAfterApply: function(bool) {
                 this._unrefImageDataAfterApply = bool;
+            },
+
+            // SPOTSCALE: Returns the URL of the image, also once it has been released after upload
+            // (see setUnrefImageDataAfterApply) and getImage no longer returns it
+            getImageURL: function() {
+                if (this._image !== undefined) return this._image.getURL();
+                return this._unrefImageURL;
             },
 
             checkIsCompressed: function(format) {
@@ -966,6 +975,8 @@ utils.createPrototypeStateAttribute(
                             this.generateMipmap(gl, this._textureTarget);
 
                             if (this._unrefImageDataAfterApply) {
+                                // SPOTSCALE: Keep the URL, it identifies the texture once the image is gone
+                                this._unrefImageURL = image.getURL();
                                 this._image = undefined;
                             }
 
@@ -974,6 +985,14 @@ utils.createPrototypeStateAttribute(
                             gl.bindTexture(this._textureTarget, null);
                         }
                     } else if (this._textureHeight !== 0 && this._textureWidth !== 0) {
+                        // SPOTSCALE: A compressed texture cannot be allocated without data, which is the
+                        // case if its image was released after upload and it is made dirty again, e.g. by a
+                        // lost context. Leave it unbound rather than fail in compressedTexImage2D
+                        if (this._isCompressed) {
+                            gl.bindTexture(this._textureTarget, null);
+                            return;
+                        }
+
                         // must be called before init
                         this.computeTextureFormat();
 
