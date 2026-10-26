@@ -496,6 +496,8 @@ utils.createPrototypeStateAttribute(
                 ) {
                     Texture.getTextureManager(this._gl).releaseTextureObject(this._textureObject);
                     GLObject.removeObject(this._gl, this);
+                    // SPOTSCALE: Forget the context so that it is registered again when used again, otherwise a lost context would not invalidate it
+                    this._gl = undefined;
                 }
                 this.invalidate();
             },

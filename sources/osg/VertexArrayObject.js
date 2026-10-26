@@ -76,6 +76,8 @@ utils.createPrototypeObject(
             if (this._vaoObject !== undefined && this._gl !== undefined) {
                 VertexArrayObject.deleteGLVertexArrayObject(this._gl, this._vaoObject);
                 GLObject.removeObject(this._gl, this);
+                // SPOTSCALE: Forget the context so that it is registered again when used again, otherwise a lost context would not invalidate it
+                this._gl = undefined;
             }
             this.invalidate();
         },
